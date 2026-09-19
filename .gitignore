@@ -1,0 +1,12 @@
+node_modules/
+runtime/
+data/
+monitor/data/
+dist/
+*.local.json
+*.log
+*.lock
+.env
+.env.*
+*.exe
+*.zip
