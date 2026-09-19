@@ -17,7 +17,7 @@ class MintDeskLauncher {
   static int Classify(string body){return Regex.IsMatch(body,"\"app\"\\s*:\\s*\"mint-desk\"")&&Regex.IsMatch(body,"\"instanceId\"\\s*:\\s*\""+InstanceFor(Root)+"\"")?1:2;}
   // 0 = no listener, 1 = this folder, 2 = another service, 3 = unverified. Never open
   // another copy's in-memory wallets just because its app name matches.
-  static int Probe(){
+  internal static int Probe(){
     try{
       int port=new Uri(Url).Port;bool listening=false;
       foreach(var endpoint in IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners()){
@@ -31,9 +31,9 @@ class MintDeskLauncher {
     }catch(WebException e){return e.Status==WebExceptionStatus.ConnectFailure?0:e.Status==WebExceptionStatus.ProtocolError?2:3;}catch{return 3;}
   }
   static void Open(){
-    string[] locations={Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),"Microsoft","Edge","Application","msedge.exe"),Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),"Microsoft","Edge","Application","msedge.exe")};
-    foreach(var edge in locations)if(File.Exists(edge)){Process.Start(new ProcessStartInfo(edge,"--app="+Url+" --window-size=1380,920"){UseShellExecute=true});return;}
-    Process.Start(new ProcessStartInfo(Url){UseShellExecute=true});
+    var window=Path.Combine(Root,"MintDeskWindow.exe");
+    if(!File.Exists(window))throw new Exception("缺少 MintDeskWindow.exe，请完整解压新版安装包。");
+    Process.Start(new ProcessStartInfo(window){WorkingDirectory=Root,UseShellExecute=true});
   }
   [STAThread] static void Main(){
     Application.EnableVisualStyles();
