@@ -5,6 +5,7 @@ import {Interface,ZeroAddress,ZeroHash,TypedDataEncoder,formatEther,formatUnits,
 import {Rpc,Stop,requireThat,amount,gasPlan,json,safeError} from './lib.mjs';
 import {coordinator} from './coordinator.mjs';
 import {CostStore,costOutcome} from './cost-basis.mjs';
+import {lookupMintCost} from './chain-cost.mjs';
 
 // Protocol addresses from ProjectOpenSea/opensea-sdk constants and utils/chain.
 export const SEAPORT='0x0000000000000068f116a894984e2db1123eb395';
@@ -110,6 +111,7 @@ export function activeListingMap(rows,owner,chainId){
 }
 export class NftMarket {
  constructor({keyFile,records,dir,api,rpcFactory=url=>new Rpc(url),coord=coordinator}){this.api=api??new OpenSeaClient(keyFile);this.records=records;this.dir=dir;this.rpcFactory=rpcFactory;this.coord=coord;this.items=new Map();this.reviews=new Map();this.costs=new CostStore(path.join(path.dirname(dir),'costs'),records);}
+ async chainCost(n,rpcUrl,hash=''){const found=await lookupMintCost(n,this.rpcFactory(rpcUrl),this.api,hash);n.cost=await this.costs.saveChain(n,found);this.reviews.clear();return {cost:n.cost,found};}
  async active(owner,chainId){let next='',rows=[],seen=new Set();for(let i=0;i<10;i++){const r=await this.api.request(`account/${owner}/listings?chains=${chainName(chainId)}&limit=50${next?'&after='+encodeURIComponent(next):''}`);requireThat(Array.isArray(r.listings),'上架状态格式异常。');rows.push(...r.listings);if(!r.next)return activeListingMap(rows,owner,chainId);requireThat(typeof r.next==='string'&&!seen.has(r.next),'上架分页异常。');next=r.next;seen.add(next);}throw new Stop('上架订单超过本次查询范围，暂不重复上架。');}
  async local(n){try{return JSON.parse(await readFile(path.join(this.dir,itemKey(n)+'.json'),'utf8'));}catch(e){if(e.code==='ENOENT')return null;throw new Stop('本地上架记录不可读。');}}
  async minted(owner,chainId){const found=new Map();let files=[];try{files=await readdir(this.records);}catch{}for(const f of files.filter(f=>f.startsWith(chainId+'-')&&f.endsWith('-'+owner.toLowerCase()+'.json.receipt'))){try{const receipt=JSON.parse(await readFile(path.join(this.records,f),'utf8')),attempt=JSON.parse(await readFile(path.join(this.records,f.slice(0,-8)),'utf8'));if(receipt.success&&eq(attempt.address,owner)&&addr(attempt.nft))for(const id of receipt.tokenIds??[])if(token(id))found.set(attempt.nft.toLowerCase()+':'+id,{contract:attempt.nft,identifier:id,token_standard:'erc721',name:'本软件 mint #'+id,collection:null});}catch{}}return found;}

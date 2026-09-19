@@ -2,7 +2,7 @@
 
 Windows 本地 NFT 监控、自动 mint、持仓查看与 OpenSea 批量上架工具。源码采用 MIT 许可证。
 
-[下载 Windows 完整包](https://github.com/cryptoresetlife/mint-desk/releases/download/v1.0-cost/Mint-Desk-Windows-V1.0-Cost-Share.zip) · [发布记录](https://github.com/cryptoresetlife/mint-desk/releases) · [详细操作说明](docs/USER-GUIDE.md)
+[下载 Windows 完整包](https://github.com/cryptoresetlife/mint-desk/releases/download/v1.0-chain-cost/Mint-Desk-Windows-V1.0-Chain-Cost-Share.zip) · [发布记录](https://github.com/cryptoresetlife/mint-desk/releases) · [详细操作说明](docs/USER-GUIDE.md)
 
 ## 功能
 
@@ -56,7 +56,7 @@ npm start
 npm test
 ```
 
-本版 76 项测试通过，覆盖预算、签名目标、并发、停止、重复提交、上架费用及本机访问隔离。上架流程使用模拟测试；没有使用真实钱包进行测试授权或测试售卖。Robinhood 接口与持仓查询另做了真实只读检查。
+本版 91 项测试通过，覆盖预算、签名目标、并发、停止、重复提交、上架费用及本机访问隔离。上架流程使用模拟测试；没有使用真实钱包进行测试授权或测试售卖。Robinhood 接口与持仓查询另做了真实只读检查。
 
 ## Windows 构建
 
@@ -90,6 +90,6 @@ npm test
 
 ## 成本与保本参考
 
-在“我的 NFT”点击“填写 / 修改成本”，填写单个 NFT 的实际买入或 mint 金额和分摊 gas。支持 ETH、USDG、USDC、WETH 成本记录；未知 gas 留空。匹配的本机成功 mint 回执可自动补充历史成本，批量 mint 均摊，但不追踪卖出后买回等后续转手。其他来源请手动填写或修正。
+在“我的 NFT”点击“填写 / 修改成本”，填写单个 NFT 的实际买入或 mint 金额和分摊 gas。支持 ETH、USDG、USDC、WETH 成本记录；未知 gas 留空。匹配的本机成功 mint 回执可自动补充历史成本，批量 mint 均摊，但不追踪卖出后买回等后续转手。刷新持仓时会自动尝试查询最多 10 项缺失成本；也可点击“链上查 mint 成本”。支持从 OpenSea mint 索引定位交易，并以 RPC 交易、回执、SeaDrop 事件核验实付金额与实际 gas；索引未收录时可提供交易哈希。当前自动核算仅支持本钱包直接付款的 SeaDrop Public ERC-721 mint。买入、转入、ERC-1155 或无法归属的支出请手动填写，未知成本不会记为零。已知转出或历史不完整时仅显示历史 mint 支出，不计算当前盈亏。
 
 上架弹窗会显示成本；预览时显示预计盈亏和保本参考售价，计入出售费用及本次授权 gas 估算上限。ETH 支出与售价币种不同时，可手填“1 ETH ≈ 多少报价币”的参考价；未填写汇率或成本不完整时不编造盈亏。其他跨币种成本暂不自动换算。成本记录按钱包、网络、合约、Token ID 保存在本机 data/costs 中，不随分享包分发。

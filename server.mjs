@@ -58,6 +58,11 @@ async function action(route,b){
     const rpcUrl=b.rpcUrl?.trim()||(chainId===4663?monitor.config.rpcUrl:CHAINS[chainId].rpc);new Rpc(rpcUrl);
     return nftMarket.inventory(w,chainId,rpcUrl,b.next??'');
   }
+  if(route==='/api/nfts/cost-chain'){
+    const n=nftMarket.selected([b.itemId],[...wallets.values()])[0];
+    const rpcUrl=b.rpcUrl?.trim()||(n.chainId===4663?monitor.config.rpcUrl:CHAINS[n.chainId].rpc);new Rpc(rpcUrl);
+    return nftMarket.chainCost(n,rpcUrl,b.transactionHash?.trim()||'');
+  }
   if(route==='/api/nfts/cost'){
     const n=nftMarket.selected([b.itemId],[...wallets.values()])[0];
     const cost=await nftMarket.costs.save(n,b);n.cost=cost;nftMarket.reviews.clear();return {cost};

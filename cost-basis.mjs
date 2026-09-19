@@ -23,8 +23,10 @@ export class CostStore{
  async get(n){
   try{const b=JSON.parse(await readFile(this.file(n),'utf8'));return {...manualCost({...b,gasEth:b.gasEth??''}),updatedAt:b.updatedAt};}catch(e){if(e.code!=='ENOENT')return {source:'invalid'};}
   const base=path.join(this.records,`${n.chainId}-${n.contract.toLowerCase()}-${n.owner.toLowerCase()}.json`);
-  try{return recordedCost(JSON.parse(await readFile(base,'utf8')),JSON.parse(await readFile(base+'.receipt','utf8')),n);}catch{return null;}
+  try{const local=recordedCost(JSON.parse(await readFile(base,'utf8')),JSON.parse(await readFile(base+'.receipt','utf8')),n);if(local)return local;}catch{}
+  try{const c=JSON.parse(await readFile(this.file(n)+'.chain','utf8'));requireThat(c.source==='chain-mint'&&c.symbol==='ETH'&&/^0x[0-9a-f]{64}$/i.test(c.hash)&&typeof c.historyOnly==='boolean','链上成本缓存无效。');costAmount(c.paid);costAmount(c.gasEth);return c;}catch{return null;}
  }
+ async saveChain(n,value){await mkdir(this.dir,{recursive:true});const dest=this.file(n)+'.chain',temp=dest+'.'+randomUUID()+'.tmp';await writeFile(temp,JSON.stringify(value),{mode:0o600});await rename(temp,dest);return this.get(n);}
  async save(n,b){
   if(b.clear){try{await unlink(this.file(n));}catch(e){if(e.code!=='ENOENT')throw e;}return this.get(n);}
   const value=manualCost(b);await mkdir(this.dir,{recursive:true});const dest=this.file(n),temp=dest+'.'+randomUUID()+'.tmp';await writeFile(temp,JSON.stringify(value),{mode:0o600});await rename(temp,dest);return value;
@@ -33,6 +35,7 @@ export class CostStore{
 // Costs are advisory only. They never alter the seller's order or its price.
 export function costOutcome(cost,net,currency,approvalGasEth,ethRate,feeBps=0){
  if(!cost||cost.source==='invalid')return {status:'missing',note:'成本未填写，无法计算盈亏。'};
+ if(cost.historyOnly)return {status:'history',note:cost.historyNote};
  if(cost.gasEth===null)return {status:'incomplete',note:'买入时 gas 未填写，成本不完整，暂不计算盈亏。'};
  let rate=null;if(ethRate!==undefined&&ethRate!==''){rate=costAmount(ethRate);requireThat(rate>0n,'ETH 换算价必须大于 0。');}
  const quoteEth=currency.native===true&&currency.symbol==='ETH';
