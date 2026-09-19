@@ -4,6 +4,7 @@ import {randomUUID,randomBytes} from 'node:crypto';
 import {Interface,ZeroAddress,ZeroHash,TypedDataEncoder,formatEther,formatUnits,parseUnits,keccak256,Transaction,verifyTypedData} from 'ethers';
 import {Rpc,Stop,requireThat,amount,gasPlan,json,safeError} from './lib.mjs';
 import {coordinator} from './coordinator.mjs';
+import {CostStore,costOutcome} from './cost-basis.mjs';
 
 // Protocol addresses from ProjectOpenSea/opensea-sdk constants and utils/chain.
 export const SEAPORT='0x0000000000000068f116a894984e2db1123eb395';
@@ -108,7 +109,7 @@ export function activeListingMap(rows,owner,chainId){
  }return out;
 }
 export class NftMarket {
- constructor({keyFile,records,dir,api,rpcFactory=url=>new Rpc(url),coord=coordinator}){this.api=api??new OpenSeaClient(keyFile);this.records=records;this.dir=dir;this.rpcFactory=rpcFactory;this.coord=coord;this.items=new Map();this.reviews=new Map();}
+ constructor({keyFile,records,dir,api,rpcFactory=url=>new Rpc(url),coord=coordinator}){this.api=api??new OpenSeaClient(keyFile);this.records=records;this.dir=dir;this.rpcFactory=rpcFactory;this.coord=coord;this.items=new Map();this.reviews=new Map();this.costs=new CostStore(path.join(path.dirname(dir),'costs'),records);}
  async active(owner,chainId){let next='',rows=[],seen=new Set();for(let i=0;i<10;i++){const r=await this.api.request(`account/${owner}/listings?chains=${chainName(chainId)}&limit=50${next?'&after='+encodeURIComponent(next):''}`);requireThat(Array.isArray(r.listings),'上架状态格式异常。');rows.push(...r.listings);if(!r.next)return activeListingMap(rows,owner,chainId);requireThat(typeof r.next==='string'&&!seen.has(r.next),'上架分页异常。');next=r.next;seen.add(next);}throw new Stop('上架订单超过本次查询范围，暂不重复上架。');}
  async local(n){try{return JSON.parse(await readFile(path.join(this.dir,itemKey(n)+'.json'),'utf8'));}catch(e){if(e.code==='ENOENT')return null;throw new Stop('本地上架记录不可读。');}}
  async minted(owner,chainId){const found=new Map();let files=[];try{files=await readdir(this.records);}catch{}for(const f of files.filter(f=>f.startsWith(chainId+'-')&&f.endsWith('-'+owner.toLowerCase()+'.json.receipt'))){try{const receipt=JSON.parse(await readFile(path.join(this.records,f),'utf8')),attempt=JSON.parse(await readFile(path.join(this.records,f.slice(0,-8)),'utf8'));if(receipt.success&&eq(attempt.address,owner)&&addr(attempt.nft))for(const id of receipt.tokenIds??[])if(token(id))found.set(attempt.nft.toLowerCase()+':'+id,{contract:attempt.nft,identifier:id,token_standard:'erc721',name:'本软件 mint #'+id,collection:null});}catch{}}return found;}
@@ -123,7 +124,7 @@ export class NftMarket {
   const items=[];for(const [key,v]of [...raws].slice(0,200)){
    const n={chainId,walletId:wallet.id,owner:wallet.address,contract:v.contract.toLowerCase(),tokenId:BigInt(v.identifier).toString(),standard:String(v.token_standard??'').toLowerCase(),slug:typeof v.collection==='string'&&/^[a-z0-9_-]{1,150}$/i.test(v.collection)?v.collection:null,name:String(v.name||'NFT #'+v.identifier).slice(0,140),minted:minted.has(key)};
    n.id=itemKey(n);n.url=`https://opensea.io/assets/${chainName(chainId)}/${n.contract}/${n.tokenId}`;
-   n.listing=listed?.get(key)??null;n.listingChecked=listed!==null;n.local=await this.local(n);
+   n.listing=listed?.get(key)??null;n.listingChecked=listed!==null;n.local=await this.local(n);n.cost=await this.costs.get(n);
    n.owned=null;if(n.minted){try{await ownership(rpc,n);n.owned=true;}catch{n.owned=false;}}
    if(this.items.size>=5000)this.items.delete(this.items.keys().next().value);this.items.set(n.id,n);items.push(n);
   }return {items,next:typeof page.next==='string'?page.next:null,warnings,checkedAt:Date.now()};
@@ -146,12 +147,13 @@ export class NftMarket {
   for(const item of items){requireThat(!listed.has(nftKey(item)),'选择中已有上架 NFT，请取消勾选后重试。');const old=await this.local(item);requireThat(!old||Number(old.end)*1000<Date.now(),'此 NFT 有未过期的本地上架记录（可能已提交）；请先核实或等其到期。');
    await ownership(rpc,item);const {n,collection}=await this.collection(item);requireThat(json(listingCurrency(collection,n))===json(currency),'上架币种已变化，请重新选择 NFT。');const fees=feePlan(collection,n,price),req=await approval(rpc,n);let estimatedGas='0';
    if(req){const [estimate,gp,balance]=await Promise.all([rpc.send('eth_estimateGas',[req]),rpc.send('eth_gasPrice'),rpc.send('eth_getBalance',[n.owner,'pending'])]);estimatedGas=formatEther(gasPlan(BigInt(estimate),BigInt(gp),BigInt(balance),0n,b.maxGasEth).maxCost);}
-   rows.push({n,fees,approvalNeeded:!!req,estimatedGas});
+   const cost=await this.costs.get(n),outcome=costOutcome(cost,formatUnits(fees.net,currency.decimals),currency,estimatedGas,b.ethRate,fees.fees.reduce((sum,f)=>sum+f.bps,0));
+   rows.push({n,fees,approvalNeeded:!!req,estimatedGas,cost,outcome});
   }
   const maxBudget=gasCap*BigInt(rows.length),balance=BigInt(await rpc.send('eth_getBalance',[items[0].owner,'pending'])),reserved=this.coord.reserved(items[0],items[0].owner);
   requireThat(balance>=maxBudget+reserved,'余额不足以覆盖本批授权预算与其他运行任务。');
   const id=randomUUID(),review={id,rows,price:price.toString(),priceText,currency,...(currency.native?{priceEth:priceText}:{}),maxGasEth:b.maxGasEth,maxBudget:formatEther(maxBudget),hours,rpcUrl,domain,at:Date.now()};this.reviews.clear();this.reviews.set(id,review);
-  return {reviewId:id,currency,rows:rows.map(r=>({id:r.n.id,name:r.n.name,tokenId:r.n.tokenId,owner:r.n.owner,standard:r.n.standard,price:priceText,net:formatUnits(r.fees.net,currency.decimals),...(currency.native?{priceEth:priceText,netEth:formatEther(r.fees.net)}:{}),fees:r.fees.fees.map(f=>({...f,amountText:formatUnits(f.amount,currency.decimals)})),approvalNeeded:r.approvalNeeded,estimatedGas:r.estimatedGas})),hours,maxBudget:review.maxBudget,reservedEth:formatEther(reserved)};
+  return {reviewId:id,currency,rows:rows.map(r=>({id:r.n.id,name:r.n.name,tokenId:r.n.tokenId,owner:r.n.owner,standard:r.n.standard,cost:r.cost,outcome:r.outcome,price:priceText,net:formatUnits(r.fees.net,currency.decimals),...(currency.native?{priceEth:priceText,netEth:formatEther(r.fees.net)}:{}),fees:r.fees.fees.map(f=>({...f,amountText:formatUnits(f.amount,currency.decimals)})),approvalNeeded:r.approvalNeeded,estimatedGas:r.estimatedGas})),hours,maxBudget:review.maxBudget,reservedEth:formatEther(reserved)};
  }
 }
 
