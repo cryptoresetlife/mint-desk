@@ -2,6 +2,8 @@
 
 The MIT license covers Mint Desk's own source. Third-party software retains its own licenses.
 
+- Microsoft WebView2 SDK 1.0.3800.47: restored from official NuGet with a pinned SHA-256 by scripts/restore-webview2.ps1. Windows packages include WEBVIEW2-LICENSE.txt and WEBVIEW2-NOTICE.txt. The desktop window requires the Microsoft Edge WebView2 Runtime installed on Windows; it is separate from the Edge browser app.
+
 - ethers and transitive npm dependencies: pinned versions and integrity hashes are in package-lock.json. Retain the license files included with installed packages when redistributing node_modules.
 - Node.js is not vendored in this repository. Windows release bundles include the official runtime and its full NODE-LICENSE.txt, including bundled component notices.
 - OpenSea Seaport and SeaDrop are externally deployed protocols. This repository uses protocol interfaces and addresses for interoperability. Mint Desk is an independent project, not an official OpenSea or Robinhood product.

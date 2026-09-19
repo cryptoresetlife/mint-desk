@@ -2,7 +2,7 @@
 
 Windows 本地 NFT 监控、自动 mint、持仓查看与 OpenSea 批量上架工具。源码采用 MIT 许可证。
 
-[下载 Windows 完整包](https://github.com/cryptoresetlife/mint-desk/releases/download/v1.0-currency/Mint-Desk-Windows-V1.0-Currency-Share.zip) · [发布记录](https://github.com/cryptoresetlife/mint-desk/releases) · [详细操作说明](docs/USER-GUIDE.md)
+[下载 Windows 完整包](https://github.com/cryptoresetlife/mint-desk/releases/download/v1.0-desktop/Mint-Desk-Windows-V1.0-Desktop-Share.zip) · [发布记录](https://github.com/cryptoresetlife/mint-desk/releases) · [详细操作说明](docs/USER-GUIDE.md)
 
 ## 功能
 
@@ -15,6 +15,8 @@ Windows 本地 NFT 监控、自动 mint、持仓查看与 OpenSea 批量上架�
 
 ## 快速使用
 
+桌面窗口、任务栏和托盘统一使用 M_ 图标。Windows 完整包包含独立窗口组件，需要已安装 Microsoft Edge WebView2 Runtime。关闭窗口会保留后台任务；彻底退出请使用软件内的“停止任务并退出软件”。项目的 OpenSea 链接在默认浏览器打开。
+
 1. 下载完整 ZIP，完整解压后双击 **Mint Desk.exe**，无需另装 Node.js。
 2. 在 **机会监控 → 监控设置 / API Key** 填写自己的 [OpenSea API Key](https://opensea.io/settings/developer) 和 RPC。
 3. 在 **钱包管理** 导入自己的钱包私钥。
@@ -22,7 +24,7 @@ Windows 本地 NFT 监控、自动 mint、持仓查看与 OpenSea 批量上架�
 5. **上架 NFT**：我的 NFT → 刷新持仓 → 勾选 NFT → 批量上架 → 自填售价与期限 → 预览费用 → 核对并确认上架。
 6. 在 **运行任务** 查看进度；退出请点击 **停止任务并退出软件**。关闭网页不会停止后台任务。
 
-更新前先处理运行任务并退出旧软件，再打开新版、重新导入钱包。新解压包是空配置；请保留旧文件夹的本机记录。不要分享使用过的文件夹。
+更新前先处理运行任务并退出旧软件，再打开新版、重新导入钱包。新解压包默认没有项目、钱包、RPC Key 或 OpenSea API Key；请保留旧文件夹的本机记录。不要分享使用过的文件夹。
 
 ## 多币种上架更新
 

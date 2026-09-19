@@ -10,3 +10,7 @@ dist/
 .env.*
 *.exe
 *.zip
+build-cache/
+*.dll
+WEBVIEW2-LICENSE.txt
+WEBVIEW2-NOTICE.txt
