@@ -61,10 +61,10 @@ async function action(route,b){
   if(route==='/api/nfts/market'){
     const n=nftMarket.selected([b.itemId],[...wallets.values()])[0];return projectMarket.get({chainId:n.chainId,address:n.contract});
   }
-  if(route==='/api/listings/preview'){
+  if(route==='/api/listings/preview'||route==='/api/listings/currency'){
     const ns=nftMarket.selected(b.itemIds,[...wallets.values()]),chainId=ns[0].chainId;
     const rpcUrl=b.rpcUrl?.trim()||(chainId===4663?monitor.config.rpcUrl:CHAINS[chainId].rpc);new Rpc(rpcUrl);
-    return nftMarket.preview(b,[...wallets.values()],rpcUrl);
+    return route==='/api/listings/currency'?nftMarket.currency(b.itemIds,[...wallets.values()],rpcUrl):nftMarket.preview(b,[...wallets.values()],rpcUrl);
   }
   if(route==='/api/listings/start'){
     requireThat(b.confirm===true,'请核对上架售价、费用、期限并授权。');

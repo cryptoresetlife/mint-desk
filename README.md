@@ -2,7 +2,7 @@
 
 Windows 本地 NFT 监控、自动 mint、持仓查看与 OpenSea 批量上架工具。源码采用 MIT 许可证。
 
-[下载 Windows 完整包](https://github.com/cryptoresetlife/mint-desk/releases/download/v1.0-nft/Mint-Desk-Windows-V1.0-NFT-Share.zip) · [发布记录](https://github.com/cryptoresetlife/mint-desk/releases) · [详细操作说明](docs/USER-GUIDE.md)
+[下载 Windows 完整包](https://github.com/cryptoresetlife/mint-desk/releases/download/v1.0-currency/Mint-Desk-Windows-V1.0-Currency-Share.zip) · [发布记录](https://github.com/cryptoresetlife/mint-desk/releases) · [详细操作说明](docs/USER-GUIDE.md)
 
 ## 功能
 
@@ -10,7 +10,7 @@ Windows 本地 NFT 监控、自动 mint、持仓查看与 OpenSea 批量上架�
 - **自动 mint**：Robinhood / Ethereum 上支持的 SeaDrop Public 阶段，免费或原生 ETH 付款。
 - **多钱包、多项目**：最多 100 个钱包；多项目同时等待、提前准备，同钱包协调发送，不同钱包可并行。
 - **我的 NFT**：查看导入钱包持仓，补充本软件成功 mint 的本地记录，查询地板与成交价，点击名称前往 OpenSea。
-- **批量上架**：同一钱包每批 1–20 项，每项出售 1 个，自填 ETH 售价和期限；预览费用并确认后才提交。
+- **批量上架**：同一钱包每批 1–20 项，每项出售 1 个，按系列报价币种自填售价和期限；预览费用并确认后才提交。
 - **本机运行**：用户填写自己的 RPC 和 OpenSea API Key，不使用 AI 额度；私钥仅保存在运行内存。
 
 ## 快速使用
@@ -24,10 +24,14 @@ Windows 本地 NFT 监控、自动 mint、持仓查看与 OpenSea 批量上架�
 
 更新前先处理运行任务并退出旧软件，再打开新版、重新导入钱包。新解压包是空配置；请保留旧文件夹的本机记录。不要分享使用过的文件夹。
 
+## 多币种上架更新
+
+此前 USDG 系列被 ETH-only 检查拦截的问题已修复。上架前先显示币种和代币地址，再让你填写售价，不沿用旧输入或自动换算。例如填写 20 USDG 就是 20 USDG；不能把 ETH 数字照搬。USDG 最多 6 位小数，费用与到账均按 USDG 计算，gas 单独用 ETH。已有 ETH 上架记录仍可识别。
+
 ## 支持范围
 
 - mint 仅支持已适配的 SeaDrop 公开阶段；白名单、自定义合约和 ERC-20 支付暂不支持。
-- 上架支持标准 ERC-721 / ERC-1155 的原生 ETH 固定售价。特殊交易区域和其他定价币种请到 OpenSea 操作。
+- 上架支持标准 ERC-721 / ERC-1155 的固定售价，自动识别系列指定的原生 ETH 或标准 ERC-20 报价币种（如 USDG、USDC、WETH），核验代币地址、符号和精度。售价与到账按该币种计算，授权 gas 另付 ETH。不同币种请分批上架，特殊交易区域仍需到 OpenSea 操作。
 - ERC-721 优先授权单个 NFT；ERC-1155 必要时授权 OpenSea 指定通道操作该系列全部 NFT。授权不随挂单到期自动撤销，提交前会明确说明。
 - 上架后需有人购买才有收入。地板挂单不是成交价；监控筛选及提前准备均不保证盈利或抢到。
 - 已有有效挂单或未过期本地记录会阻止重复提交。不自动改价、撤单或重试不明订单；请到 OpenSea 核实和撤单。
@@ -50,7 +54,7 @@ npm start
 npm test
 ```
 
-本版 65 项测试通过，覆盖预算、签名目标、并发、停止、重复提交、上架费用及本机访问隔离。上架流程使用模拟测试；没有使用真实钱包进行测试授权或测试售卖。Robinhood 接口与持仓查询另做了真实只读检查。
+本版 71 项测试通过，覆盖预算、签名目标、并发、停止、重复提交、上架费用及本机访问隔离。上架流程使用模拟测试；没有使用真实钱包进行测试授权或测试售卖。Robinhood 接口与持仓查询另做了真实只读检查。
 
 ## Windows 构建
 

@@ -1,7 +1,7 @@
 import {readFile,readdir,mkdir,open,writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID,randomBytes} from 'node:crypto';
-import {Interface,ZeroAddress,ZeroHash,TypedDataEncoder,formatEther,formatUnits,keccak256,Transaction,verifyTypedData} from 'ethers';
+import {Interface,ZeroAddress,ZeroHash,TypedDataEncoder,formatEther,formatUnits,parseUnits,keccak256,Transaction,verifyTypedData} from 'ethers';
 import {Rpc,Stop,requireThat,amount,gasPlan,json,safeError} from './lib.mjs';
 import {coordinator} from './coordinator.mjs';
 
@@ -22,6 +22,25 @@ const token=v=>/^\d{1,78}$/.test(String(v??''))&&BigInt(v)<2n**256n;
 const chainName=id=>id===4663?'robinhood':id===1?'ethereum':null;
 const itemKey=n=>`${n.chainId}-${n.owner.toLowerCase()}-${n.contract.toLowerCase()}-${n.tokenId}`;
 const nftKey=n=>`${n.contract.toLowerCase()}:${n.tokenId}`;
+const CURRENCY_ABI=new Interface(['function decimals() view returns(uint8)','function symbol() view returns(string)']);
+export function listingCurrency(collection,n){
+ requireThat(collection.collection===n.slug&&collection.contracts?.some(c=>c.chain===chainName(n.chainId)&&eq(c.address,n.contract)),'系列与 NFT 合约不匹配。');
+ const c=collection.pricing_currencies?.listing_currency;
+ requireThat(c&&c.chain===chainName(n.chainId)&&/^0x[0-9a-f]{40}$/i.test(c.address??'')&&Number.isInteger(c.decimals)&&c.decimals>=0&&c.decimals<=36&&/^[A-Za-z0-9._-]{1,24}$/.test(c.symbol??''),'平台未返回可核验的上架币种，请到 OpenSea 核实。');
+ const native=eq(c.address,ZeroAddress);requireThat(!native||(c.decimals===18&&c.symbol==='ETH'),'原生币信息不匹配。');
+ return {chainId:n.chainId,address:c.address.toLowerCase(),symbol:c.symbol,decimals:c.decimals,native};
+}
+export async function verifyCurrency(rpc,c){
+ requireThat(Number(BigInt(await rpc.send('eth_chainId')))===c.chainId,'报价币种与 RPC 网络不一致。');
+ if(c.native)return;
+ const [code,decimals,symbol]=await Promise.all([rpc.send('eth_getCode',[c.address,'latest']),rpc.call(CURRENCY_ABI,c.address,'decimals',[]),rpc.call(CURRENCY_ABI,c.address,'symbol',[])]);
+ requireThat(/^0x[0-9a-f]+$/i.test(code)&&code!=='0x0'&&Number(decimals[0])===c.decimals&&symbol[0]===c.symbol,'报价代币的合约、精度或名称与链上不一致。');
+}
+export function listingAmount(value,c){
+ requireThat(typeof value==='string'&&/^\d{1,78}(\.\d{1,36})?$/.test(value),'售价必须是普通十进制数字。');
+ requireThat((value.split('.')[1]?.length??0)<=c.decimals,`${c.symbol} 售价最多 ${c.decimals} 位小数。`);
+ const result=parseUnits(value,c.decimals);requireThat(result>0n&&result<2n**256n,'售价必须大于 0 且在允许范围内。');return result;
+}
 export class OpenSeaClient {
  constructor(keyFile,fetcher=fetch){this.keyFile=keyFile;this.fetcher=fetcher;this.cooldown=0;}
  async request(endpoint,body){
@@ -39,8 +58,7 @@ export function feePlan(collection,n,price){
  requireThat(collection.collection===n.slug&&collection.contracts?.some(c=>c.chain===chainName(n.chainId)&&eq(c.address,n.contract)),'系列与 NFT 合约不匹配。');
  requireThat(!collection.is_disabled,'该系列已被平台禁用。');
  requireThat(!collection.required_zone||eq(collection.required_zone,ZeroAddress),'该系列需要特殊交易区域，当前请到 OpenSea 上架。');
- const currency=collection.pricing_currencies?.listing_currency;
- requireThat(!currency||(eq(currency.address,ZeroAddress)&&currency.decimals===18),'本版仅支持原生 ETH 定价上架。');
+ listingCurrency(collection,n);
  requireThat(Array.isArray(collection.fees)&&collection.fees.length<=20,'平台未返回明确费用，暂不签名。');
  const fees=collection.fees.map(f=>{
   const text=String(f.fee);requireThat(/^\d{1,3}(\.\d{1,6})?$/.test(text)&&addr(f.recipient),'平台费用格式异常。');
@@ -50,8 +68,8 @@ export function feePlan(collection,n,price){
  requireThat(fees.reduce((v,f)=>v+f.bps,0)<10000,'费用必须小于售价。');
  const total=fees.reduce((v,f)=>v+BigInt(f.amount),0n),net=price-total;requireThat(net>0n,'预计到账必须大于 0。');return {fees,total:total.toString(),net:net.toString()};
 }
-export function buildOrder(n,price,fees,counter,start,end,salt='0x'+randomBytes(32).toString('hex')){
- const consideration=[{recipient:n.owner,amount:fees.net},...fees.fees.filter(f=>BigInt(f.amount)>0n)].map(f=>({itemType:0,token:ZeroAddress,identifierOrCriteria:'0',startAmount:f.amount,endAmount:f.amount,recipient:f.recipient}));
+export function buildOrder(n,price,fees,counter,start,end,salt='0x'+randomBytes(32).toString('hex'),currency={native:true,address:ZeroAddress}){
+ const consideration=[{recipient:n.owner,amount:fees.net},...fees.fees.filter(f=>BigInt(f.amount)>0n)].map(f=>({itemType:currency.native?0:1,token:currency.address,identifierOrCriteria:'0',startAmount:f.amount,endAmount:f.amount,recipient:f.recipient}));
  const order={offerer:n.owner,zone:ZeroAddress,offer:[{itemType:n.standard==='erc721'?2:3,token:n.contract,identifierOrCriteria:n.tokenId,startAmount:'1',endAmount:'1'}],consideration,orderType:0,startTime:String(start),endTime:String(end),zoneHash:ZeroHash,salt:BigInt(salt).toString(),conduitKey:CONDUITS[n.chainId].key,counter:String(counter)};
  requireThat(consideration.reduce((v,f)=>v+BigInt(f.startAmount),0n)===price,'订单金额不匹配。');return order;
 }
@@ -112,19 +130,28 @@ export class NftMarket {
  }
  selected(ids,wallets){requireThat(Array.isArray(ids)&&ids.length>0&&ids.length<=20&&new Set(ids).size===ids.length,'每批选择 1–20 个不同 NFT。');return ids.map(id=>{const n=this.items.get(id);requireThat(n&&wallets.some(w=>w.id===n.walletId&&eq(w.address,n.owner)),'NFT 或钱包已改变，请刷新持仓。');return n;});}
  async collection(n){const detail=await this.api.request(`chain/${chainName(n.chainId)}/contract/${n.contract}/nfts/${n.tokenId}`);const v=detail.nft;requireThat(v&&eq(v.contract,n.contract)&&String(v.identifier)===n.tokenId&&String(v.token_standard).toLowerCase()===n.standard&&/^[a-z0-9_-]{1,150}$/i.test(v.collection??''),'NFT 详情未匹配。');n={...n,slug:v.collection};return {n,collection:await this.api.request('collections/'+encodeURIComponent(n.slug))};}
+ async currency(ids,wallets,rpcUrl){
+  const items=this.selected(ids,wallets);requireThat(items.every(n=>n.walletId===items[0].walletId&&n.chainId===items[0].chainId),'每批选择同一钱包、同一条链的 NFT。');
+  let currency;for(const item of items){const {n,collection}=await this.collection(item),c=listingCurrency(collection,n);requireThat(!currency||json(c)===json(currency),'所选 NFT 的上架币种不同，请按币种分批上架。');currency=c;}
+  await verifyCurrency(this.rpcFactory(rpcUrl),currency);return {currency};
+ }
  async preview(b,wallets,rpcUrl){
-  const items=this.selected(b.itemIds,wallets),price=amount(b.priceEth,'上架单价'),gasCap=amount(b.maxGasEth,'每次授权 gas 上限'),hours=Number(b.hours);
+  const items=this.selected(b.itemIds,wallets),gasCap=amount(b.maxGasEth,'每次授权 gas 上限'),hours=Number(b.hours);
+  const {currency}=await this.currency(b.itemIds,wallets,rpcUrl);
+  // Old ETH-only clients must never silently reinterpret an ETH amount as USDG.
+  requireThat(b.currency?json(b.currency)===json(currency):currency.native&&b.priceEth!==undefined,'上架币种已变化或尚未确认，请关闭窗口重新选择 NFT；不会自动换算售价。');
+  const price=listingAmount(b.price??b.priceEth,currency),priceText=formatUnits(price,currency.decimals);
   requireThat(Number.isInteger(hours)&&hours>=1&&hours<=720,'上架期限为 1–720 小时。');requireThat(items.every(n=>n.walletId===items[0].walletId&&n.chainId===items[0].chainId),'每批选择同一钱包、同一条链的 NFT。');
   const rpc=this.rpcFactory(rpcUrl),domain=await verifyProtocol(rpc,items[0].chainId),listed=await this.active(items[0].owner,items[0].chainId),rows=[];
   for(const item of items){requireThat(!listed.has(nftKey(item)),'选择中已有上架 NFT，请取消勾选后重试。');const old=await this.local(item);requireThat(!old||Number(old.end)*1000<Date.now(),'此 NFT 有未过期的本地上架记录（可能已提交）；请先核实或等其到期。');
-   await ownership(rpc,item);const {n,collection}=await this.collection(item),fees=feePlan(collection,n,price),req=await approval(rpc,n);let estimatedGas='0';
+   await ownership(rpc,item);const {n,collection}=await this.collection(item);requireThat(json(listingCurrency(collection,n))===json(currency),'上架币种已变化，请重新选择 NFT。');const fees=feePlan(collection,n,price),req=await approval(rpc,n);let estimatedGas='0';
    if(req){const [estimate,gp,balance]=await Promise.all([rpc.send('eth_estimateGas',[req]),rpc.send('eth_gasPrice'),rpc.send('eth_getBalance',[n.owner,'pending'])]);estimatedGas=formatEther(gasPlan(BigInt(estimate),BigInt(gp),BigInt(balance),0n,b.maxGasEth).maxCost);}
    rows.push({n,fees,approvalNeeded:!!req,estimatedGas});
   }
   const maxBudget=gasCap*BigInt(rows.length),balance=BigInt(await rpc.send('eth_getBalance',[items[0].owner,'pending'])),reserved=this.coord.reserved(items[0],items[0].owner);
   requireThat(balance>=maxBudget+reserved,'余额不足以覆盖本批授权预算与其他运行任务。');
-  const id=randomUUID(),review={id,rows,price:price.toString(),priceEth:b.priceEth,maxGasEth:b.maxGasEth,maxBudget:formatEther(maxBudget),hours,rpcUrl,domain,at:Date.now()};this.reviews.clear();this.reviews.set(id,review);
-  return {reviewId:id,rows:rows.map(r=>({id:r.n.id,name:r.n.name,tokenId:r.n.tokenId,owner:r.n.owner,standard:r.n.standard,priceEth:b.priceEth,netEth:formatEther(r.fees.net),fees:r.fees.fees.map(f=>({...f,amountEth:formatEther(f.amount)})),approvalNeeded:r.approvalNeeded,estimatedGas:r.estimatedGas})),hours,maxBudget:review.maxBudget,reservedEth:formatEther(reserved)};
+  const id=randomUUID(),review={id,rows,price:price.toString(),priceText,currency,...(currency.native?{priceEth:priceText}:{}),maxGasEth:b.maxGasEth,maxBudget:formatEther(maxBudget),hours,rpcUrl,domain,at:Date.now()};this.reviews.clear();this.reviews.set(id,review);
+  return {reviewId:id,currency,rows:rows.map(r=>({id:r.n.id,name:r.n.name,tokenId:r.n.tokenId,owner:r.n.owner,standard:r.n.standard,price:priceText,net:formatUnits(r.fees.net,currency.decimals),...(currency.native?{priceEth:priceText,netEth:formatEther(r.fees.net)}:{}),fees:r.fees.fees.map(f=>({...f,amountText:formatUnits(f.amount,currency.decimals)})),approvalNeeded:r.approvalNeeded,estimatedGas:r.estimatedGas})),hours,maxBudget:review.maxBudget,reservedEth:formatEther(reserved)};
  }
 }
 
@@ -151,18 +178,18 @@ export class ListingJob {
   try{this.status='运行中';await m.coord.register(this,rpc);while(!(lane=m.coord.take(this,w))){w.note='其他任务发送中，等待钱包协调';await this.wait();}
    let remaining=this.r.rows.length;
    for(const row of this.r.rows){this.check();const n=row.n;w.note='检查 '+n.name+' #'+n.tokenId;
-    const domain=await verifyProtocol(rpc,n.chainId);await ownership(rpc,n);const {collection}=await m.collection(n),fees=feePlan(collection,n,BigInt(this.r.price));requireThat(json(fees)===json(row.fees),'费用已变化，请重新预检。');
+    const domain=await verifyProtocol(rpc,n.chainId);await ownership(rpc,n);const {collection}=await m.collection(n),currency=listingCurrency(collection,n);requireThat(json(currency)===json(this.r.currency),'上架币种已变化，请重新预检。');await verifyCurrency(rpc,currency);const fees=feePlan(collection,n,BigInt(this.r.price));requireThat(json(fees)===json(row.fees),'费用已变化，请重新预检。');
     requireThat(!(await m.active(n.owner,n.chainId)).has(nftKey(n)),'该 NFT 已有有效上架，停止本批以避免重复。');const old=await m.local(n);requireThat(!old||Number(old.end)*1000<Date.now(),'已有未过期上架记录，停止重复提交。');
     await this.approve(rpc,n,w);this.check();m.coord.setBudget(this,w,amount(this.r.maxGasEth,'gas')*BigInt(--remaining));
     await ownership(rpc,n);requireThat(!(await approval(rpc,n)),'NFT 授权状态改变。');
-    const counter=(await rpc.call(PORT_ABI,SEAPORT,'getCounter',[n.owner]))[0],start=Math.floor(Date.now()/1000)-30,end=Math.floor(Date.now()/1000)+this.r.hours*3600,order=buildOrder(n,BigInt(this.r.price),fees,counter,start,end);
+    const counter=(await rpc.call(PORT_ABI,SEAPORT,'getCounter',[n.owner]))[0],start=Math.floor(Date.now()/1000)-30,end=Math.floor(Date.now()/1000)+this.r.hours*3600,order=buildOrder(n,BigInt(this.r.price),fees,counter,start,end,undefined,currency);
     const hash=TypedDataEncoder.hashStruct('OrderComponents',ORDER_TYPES,order),chainHash=(await rpc.call(PORT_ABI,SEAPORT,'getOrderHash',[order]))[0];requireThat(eq(hash,chainHash),'链上订单哈希不匹配，不签名。');this.check();
-    const latestFees=feePlan((await m.collection(n)).collection,n,BigInt(this.r.price));requireThat(json(latestFees)===json(fees),'费用已变化，停止签名，请重新预检。');
+    const latestCollection=(await m.collection(n)).collection;requireThat(json(listingCurrency(latestCollection,n))===json(currency),'上架币种已变化，停止签名。');await verifyCurrency(rpc,currency);const latestFees=feePlan(latestCollection,n,BigInt(this.r.price));requireThat(json(latestFees)===json(fees),'费用已变化，停止签名，请重新预检。');
     const signature=await w.signer.signTypedData(domain,ORDER_TYPES,order);requireThat(eq(verifyTypedData(domain,ORDER_TYPES,order,signature),n.owner),'上架签名钱包不匹配。');this.check();
-    const record={chainId:n.chainId,owner:n.owner,contract:n.contract,tokenId:n.tokenId,hash,priceEth:this.r.priceEth,netEth:formatEther(fees.net),end,status:'提交待核实',at:Date.now()};
+    const record={chainId:n.chainId,owner:n.owner,contract:n.contract,tokenId:n.tokenId,hash,currency,price:this.r.priceText,net:formatUnits(fees.net,currency.decimals),...(currency.native?{priceEth:this.r.priceText,netEth:formatEther(fees.net)}:{}),end,status:'提交待核实',at:Date.now()};
     await mkdir(m.dir,{recursive:true});await writeFile(path.join(m.dir,itemKey(n)+'.json'),json(record),{mode:0o600});this.check();
     // Persist no signature. Ambiguous responses retain the order hash and expiry.
-    try{const response=await m.api.request(`orders/${chainName(n.chainId)}/seaport/listings`,{parameters:{...order,totalOriginalConsiderationItems:order.consideration.length},protocol_address:SEAPORT,signature});requireThat(eq(response.order_hash,hash),'上架返回哈希未匹配，需核实。');record.status='已提交 OpenSea';await writeFile(path.join(m.dir,itemKey(n)+'.json'),json(record),{mode:0o600});this.results.push({...record,name:n.name,url:n.url});this.log(`${n.name} #${n.tokenId} · 已提交 · ${this.r.priceEth} ETH`);}catch{this.results.push({...record,name:n.name,url:n.url});throw new Stop('上架提交结果待核实；已保留订单哈希，不自动重发。');}
+    try{const response=await m.api.request(`orders/${chainName(n.chainId)}/seaport/listings`,{parameters:{...order,totalOriginalConsiderationItems:order.consideration.length},protocol_address:SEAPORT,signature});requireThat(eq(response.order_hash,hash),'上架返回哈希未匹配，需核实。');record.status='已提交 OpenSea';await writeFile(path.join(m.dir,itemKey(n)+'.json'),json(record),{mode:0o600});this.results.push({...record,name:n.name,url:n.url});this.log(`${n.name} #${n.tokenId} · 已提交 · ${this.r.priceText} ${currency.symbol}`);}catch{this.results.push({...record,name:n.name,url:n.url});throw new Stop('上架提交结果待核实；已保留订单哈希，不自动重发。');}
    }w.status='已完成';w.note=`已提交 ${this.results.length} 个上架订单`;this.status='已完成';
   }catch(e){w.status='停止';w.note=safeError(e);this.log(w.note);this.status=this.controller.signal.aborted?'已停止':'已结束';}
   finally{w.signer=null;await lane?.release();await m.coord.unregister(this);this.finished=true;}
