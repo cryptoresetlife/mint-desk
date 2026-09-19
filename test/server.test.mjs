@@ -16,6 +16,13 @@ test('本机接口：隔离跨站访问、导入校验、无默认真实运行�
     assert.equal((await call('/api/monitor/start',{})).status,400);
     assert.equal((await call('/api/monitor/draft',{address:'0x'+'1'.repeat(40),source:'chain'})).status,400);
     assert.equal((await call('/api/monitor/settings',{apiKey:'not-a-key'},{origin:'https://evil.invalid'})).status,400);
+    assert.equal((await fetch(origin+'/api/tracker')).status,400);
+    const tracker=await(await call('/api/tracker')).json();assert.equal(tracker.running,false);
+    assert.equal((await call('/api/tracker/settings',{wallets:[]})).status,200);
+    assert.equal((await call('/api/tracker/start',{})).status,400);
+    assert.equal((await call('/api/tracker/settings',{wallets:[{address:'0x'+'f'.repeat(64)}]})).status,400);
+    assert.equal((await call('/api/tracker/stop',{})).status,200);
+    assert.equal((await fetch(origin+'/wallet-tracker-ui.js')).status,200);
     const signer=Wallet.createRandom();const bad=await call('/api/wallets',{keys:[signer.privateKey,'invalid']});assert.equal(bad.status,400);state=await(await call('/api/state')).json();assert.equal(state.wallets.length,0);
     const good=await call('/api/wallets',{keys:[signer.privateKey]});assert.equal(good.status,200);const text=await good.text();assert.ok(!text.includes(signer.privateKey));assert.ok(text.includes(signer.address));
     assert.equal((await call('/api/wallets',{keys:[signer.privateKey]})).status,400);
