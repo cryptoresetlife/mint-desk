@@ -2,10 +2,15 @@
 
 Windows 本地 NFT 监控、自动 mint、持仓查看与 OpenSea 批量上架工具。源码采用 MIT 许可证。
 
-[下载 Windows 完整包](https://github.com/cryptoresetlife/mint-desk/releases/download/v1.0-chain-cost/Mint-Desk-Windows-V1.0-Chain-Cost-Share.zip) · [发布记录](https://github.com/cryptoresetlife/mint-desk/releases) · [详细操作说明](docs/USER-GUIDE.md)
+[下载 Windows 完整包](https://github.com/cryptoresetlife/mint-desk/releases/download/v1.0-wallet-tracker/Mint-Desk-Windows-V1.0-Wallet-Tracker-Share.zip) · [发布记录](https://github.com/cryptoresetlife/mint-desk/releases) · [详细操作说明](docs/USER-GUIDE.md)
+
+## 本次更新：重点钱包监控
+
+新增 Robinhood 公开钱包活动跟踪、重点提醒和多人参与信号。发布包默认空清单；仅导入公开地址即可使用，无需导入交易钱包。详见 [更新说明](CHANGELOG.md) 和 [重点钱包教程](docs/WALLET-TRACKER.md)。
 
 ## 功能
 
+- **重点钱包**：最多 200 个公开地址，按标签与关联组管理，区分主动 mint、匹配的 Seaport 买卖与普通转账；默认 5 分钟至少 3 组参与同一合约时提醒。
 - **机会监控**：Robinhood 的利润筛选、即将开售、早期升温与原始发现。免费、付费均包含；没有成交依据时不编造收益。
 - **自动 mint**：Robinhood / Ethereum 上支持的 SeaDrop Public 阶段，免费或原生 ETH 付款。
 - **多钱包、多项目**：最多 100 个钱包；多项目同时等待、提前准备，同钱包协调发送，不同钱包可并行。
@@ -56,7 +61,7 @@ npm start
 npm test
 ```
 
-本版 91 项测试通过，覆盖预算、签名目标、并发、停止、重复提交、上架费用及本机访问隔离。上架流程使用模拟测试；没有使用真实钱包进行测试授权或测试售卖。Robinhood 接口与持仓查询另做了真实只读检查。
+本版 98 项测试通过，覆盖预算、签名目标、并发、停止、重复提交、上架费用及本机访问隔离。上架流程使用模拟测试；没有使用真实钱包进行测试授权或测试售卖。Robinhood 接口与持仓查询另做了真实只读检查。
 
 ## Windows 构建
 
@@ -77,6 +82,7 @@ npm test
 | server.mjs | 本机服务与接口 |
 | engine.mjs / coordinator.mjs | 自动 mint 与同钱包发送协调 |
 | nft-market.mjs | 持仓、授权预检、Seaport 上架订单 |
+| wallet-tracker.mjs | 公开钱包跟踪、断点补查与活动信号 |
 | monitor/ | 链上发现与行情扫描 |
 | app/ | 网页界面 |
 | test/ | 离线测试 |

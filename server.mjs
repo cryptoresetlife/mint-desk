@@ -1,3 +1,4 @@
+import {WalletTracker} from './wallet-tracker.mjs';
 import http from 'node:http';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
@@ -16,6 +17,7 @@ const port=Number(process.env.MINT_DESK_PORT||8792),origin=`http://127.0.0.1:${p
 const instanceId=createHash('sha256').update(path.resolve(base).toLowerCase()).digest('hex');
 await mkdir(records,{recursive:true});
 const monitor=new MonitorService(base);await monitor.init();
+const walletTracker=new WalletTracker(base);await walletTracker.init();
 const projectMarket=new ProjectMarket(monitor.keyFile);
 const nftMarket=new NftMarket({keyFile:monitor.keyFile,records,dir:path.join(data,'listings')});
 let projects=[];
@@ -53,6 +55,11 @@ async function history(){
   return all.sort((a,b)=>b.createdUtc.localeCompare(a.createdUtc));
 }
 async function action(route,b){
+  if(route==='/api/tracker/settings')return walletTracker.save(b);
+  if(route==='/api/tracker/start')return walletTracker.start(monitor.config.rpcUrl,monitor.config.wsUrl);
+  if(route==='/api/tracker/stop')return walletTracker.stop();
+  if(route==='/api/tracker/market'){requireThat(/^0x[0-9a-f]{40}$/i.test(b.address),'合约地址无效。');return projectMarket.get({chainId:4663,address:b.address});}
+
   if(route==='/api/nfts/refresh'){
     const w=selected([b.walletId])[0],chainId=Number(b.chainId);requireThat(CHAINS[chainId],'网络不受支持。');
     const rpcUrl=b.rpcUrl?.trim()||(chainId===4663?monitor.config.rpcUrl:CHAINS[chainId].rpc);new Rpc(rpcUrl);
@@ -136,7 +143,7 @@ async function action(route,b){
     await identity(rpc,p);
     const out=[];for(const a of items){const r=await rpc.send('eth_getTransactionReceipt',[a.hash]);out.push({...a,status:r?BigInt(r.status)===1n?'交易已入块成功（请核对 NFT）':'交易已入块失败':'未查到回执',block:r?.blockNumber??null});}return {items:out};
   }
-  if(route==='/api/exit'){await monitor.stop();for(const j of active())j.stop();wallets.clear();setTimeout(()=>process.exit(0),8000).unref();return {message:'正在停止任务并退出；已广播交易仍会在链上处理。'};}
+  if(route==='/api/exit'){walletTracker.stop();await monitor.stop();for(const j of active())j.stop();wallets.clear();setTimeout(()=>process.exit(0),8000).unref();return {message:'正在停止任务并退出；已广播交易仍会在链上处理。'};}
   throw new Stop('未知操作。');
 }
 const server=http.createServer(async(req,res)=>{
@@ -149,10 +156,11 @@ const server=http.createServer(async(req,res)=>{
     const route=new URL(req.url,origin).pathname;
     if(req.method==='GET'&&route==='/health')return send(200,{app:'mint-desk',version:'1.0.0',instanceId});
     if(req.method==='GET'&&route==='/')return send(200,(await readFile(path.join(base,'app/index.html'),'utf8')).replace('__TOKEN__',token),'text/html; charset=utf-8');
-    if(req.method==='GET'&&['/app.js','/early.js','/monitor-ui.js','/holdings.js','/style.css','/icon.svg'].includes(route))return send(200,await readFile(path.join(base,'app',route.slice(1)),'utf8'),route.endsWith('.svg')?'image/svg+xml':route.endsWith('.js')?'text/javascript; charset=utf-8':'text/css; charset=utf-8');
+    if(req.method==='GET'&&['/app.js','/wallet-tracker-ui.js','/early.js','/monitor-ui.js','/holdings.js','/style.css','/icon.svg'].includes(route))return send(200,await readFile(path.join(base,'app',route.slice(1)),'utf8'),route.endsWith('.svg')?'image/svg+xml':route.endsWith('.js')?'text/javascript; charset=utf-8':'text/css; charset=utf-8');
     requireThat(req.headers['x-mint-token']===token,'会话失效，请刷新软件页面。');
     if(req.method==='GET'&&route==='/api/state')return send(200,{projects,wallets:walletView(),jobs:[...jobs.values()].map(j=>j.view()),chains:CHAINS});
     if(req.method==='GET'&&route==='/api/history')return send(200,{items:await history()});
+    if(req.method==='GET'&&route==='/api/tracker')return send(200,walletTracker.view());
     if(req.method==='GET'&&route==='/api/monitor')return send(200,monitor.snapshot());
     if(req.method==='GET'&&route==='/api/monitor/link'){
       const address=new URL(req.url,origin).searchParams.get('address');
@@ -164,7 +172,7 @@ const server=http.createServer(async(req,res)=>{
     requireThat(req.method==='POST'&&req.headers['content-type']?.startsWith('application/json'),'请求格式不正确。');
     requireThat(!mutation,'上一项操作仍在进行，请稍候。');mutation=true;
     try {
-      let body='',size=0;for await(const chunk of req){size+=chunk.length;requireThat(size<=32000,'输入内容过多。');body+=chunk.toString('utf8');}
+      let body='',size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;requireThat(size<=(route==='/api/tracker/settings'?160000:32000),'输入内容过多。');chunks.push(chunk);}body=Buffer.concat(chunks).toString('utf8');chunks.length=0;
       let b;try{b=JSON.parse(body);}catch{throw new Stop('输入数据格式错误。');}body='';
       const result=await action(route,b);send(200,result);
     }finally{mutation=false;}
@@ -172,4 +180,4 @@ const server=http.createServer(async(req,res)=>{
 });
 server.on('error',()=>{console.error('启动失败：8792 端口可能已占用。');process.exit(1);});
 server.listen(port,'127.0.0.1',()=>console.log(`Mint Desk 已启动：${origin}。只在点击开始后发送真实交易。`));
-process.on('SIGINT',()=>{void monitor.stop();for(const j of active())j.stop();wallets.clear();server.close();setTimeout(()=>process.exit(0),8000).unref();});
+process.on('SIGINT',()=>{walletTracker.stop();void monitor.stop();for(const j of active())j.stop();wallets.clear();server.close();setTimeout(()=>process.exit(0),8000).unref();});
