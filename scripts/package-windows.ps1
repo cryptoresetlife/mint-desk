@@ -13,6 +13,9 @@ New-Item -ItemType Directory -Path $mintDist -Force | Out-Null
 $mintZip = Join-Path $mintDist ('Mint-Desk-Windows-V1.0-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.zip')
 if (Test-Path -LiteralPath $mintZip) { throw 'Output already exists.' }
 $mintEntries = [Collections.Generic.List[object]]::new()
+foreach ($mintName in @('MintDeskWindow.exe','Microsoft.Web.WebView2.Core.dll','Microsoft.Web.WebView2.WinForms.dll','WebView2Loader.dll','WEBVIEW2-LICENSE.txt','WEBVIEW2-NOTICE.txt')) {
+ $mintEntries.Add(@{File=(Get-Item -LiteralPath (Join-Path $mintRoot $mintName)).FullName;Relative=$mintName})
+}
 foreach ($mintName in @('server.mjs','engine.mjs','coordinator.mjs','lib.mjs','nft-market.mjs','monitor-service.mjs','opensea-page.mjs','project-market.mjs','run-lock.mjs','package.json','package-lock.json','README.md','LICENSE','THIRD-PARTY-NOTICES.md','START.cmd','Mint Desk.exe','Mint Desk.ico')) {
  $mintEntries.Add(@{File=(Get-Item -LiteralPath (Join-Path $mintRoot $mintName)).FullName;Relative=$mintName})
 }
