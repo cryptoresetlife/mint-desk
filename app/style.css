@@ -61,3 +61,6 @@ dialog::backdrop{background:#101d19b8;backdrop-filter:blur(2px)}.dialog-head{pad
 #monitor-events h3{display:inline;font-size:14px}#monitor-stage-help{line-height:1.9}.project-card>.run-hint{line-height:1.8}
 
 .summary>.summary-link{text-align:left;color:var(--text);font:inherit;white-space:normal;cursor:pointer;min-width:0}.summary>.summary-link:hover{background:#254d36;border-color:#a1c480}.summary>.summary-link[aria-pressed="true"]{outline:1px solid #b5d58d;outline-offset:2px}.summary>.summary-link:focus-visible{outline:3px solid #f0d18c;outline-offset:4px}#monitor-radar-heading{scroll-margin-top:20px}
+
+/* Public-wallet tracker: keep controls readable at narrow desktop widths. */
+#page-tracker .section-head{flex-wrap:wrap;gap:16px}#page-tracker .card-actions{flex-wrap:wrap;align-items:center}#page-tracker .card-actions button{white-space:nowrap;flex-shrink:0}#tracker-search{width:240px;max-width:100%}#tracker-filter{width:240px;max-width:100%}#page-tracker .project-card>a{display:block;width:fit-content;max-width:100%;margin:12px 0;overflow-wrap:anywhere}#page-tracker details p{overflow-wrap:anywhere}#tracker-addresses{width:100%;box-sizing:border-box}
