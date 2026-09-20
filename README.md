@@ -2,9 +2,13 @@
 
 Windows 本地 NFT 监控、自动 mint、持仓查看与 OpenSea 批量上架工具。源码采用 MIT 许可证。
 
-[下载 Windows 完整包](https://github.com/cryptoresetlife/mint-desk/releases/download/v1.0-nft-images/Mint-Desk-Windows-V1.0-NFT-Images-Share.zip) · [发布记录](https://github.com/cryptoresetlife/mint-desk/releases) · [详细操作说明](docs/USER-GUIDE.md)
+[下载 Windows 完整包](https://github.com/cryptoresetlife/mint-desk/releases/download/v1.0-monitor-time-fix/Mint-Desk-Windows-V1.0-Monitor-Time-Fix-Share.zip) · [发布记录](https://github.com/cryptoresetlife/mint-desk/releases) · [详细操作说明](docs/USER-GUIDE.md)
 
-## 本次更新：NFT 图片预览
+## 本次更新：监控时间兼容修复
+
+修复个别项目的链上时间超出日期显示范围，导致整个机会监控停止的问题。超范围时间会显示提示，其他项目继续扫描。包含此前的 NFT 图片预览功能。详见 [更新说明](CHANGELOG.md)。
+
+## NFT 图片预览
 
 持仓和钱包活动显示 NFT 单张图片；项目、机会监控和提醒显示系列封面。图片按需加载并共用缓存；需要自己的 OpenSea API Key。详见 [更新说明](CHANGELOG.md)。
 
