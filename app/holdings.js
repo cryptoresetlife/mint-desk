@@ -21,7 +21,7 @@
  function draw(){const root=$('nft-list');root.replaceChildren();const shown=rows.filter(n=>!$('nft-minted').checked||n.minted);
   if(!shown.length)root.append(el('p',rows.length?'当前筛选没有 NFT。':'暂无持仓结果，请先导入钱包并刷新。','empty'));
   for(const n of shown){const card=el('article',undefined,'project-card'),choose=el('label',undefined,'check'),checkbox=el('input');checkbox.type='checkbox';checkbox.checked=picked.has(n.id);checkbox.disabled=!canPick(n);checkbox.onchange=()=>{if(checkbox.checked)picked.add(n.id);else picked.delete(n.id);$('nft-list-selected').textContent=`批量上架（${picked.size}）`;};choose.append(checkbox,el('span',n.minted?'本软件 mint':'钱包持仓'));card.append(choose);
-   const h=el('h3');h.append(externalLink(n.name,n.url));card.append(h,el('p',`#${n.tokenId} · ${n.standard.toUpperCase()}`),el('div',n.contract,'address'));
+   const heading=el('div',undefined,'nft-card-heading'),identity=el('div',undefined,'nft-card-identity'),h=el('h3');h.append(externalLink(n.name,n.url));identity.append(choose,h,el('p',`#${n.tokenId} · ${n.standard.toUpperCase()}`));heading.append(identity,nftArtwork.create({chainId:n.chainId,contract:n.contract,tokenId:n.tokenId,name:n.name,imageUrl:n.imageUrl}));card.append(heading,el('div',n.contract,'address'));
    card.append(el('p',n.owned===false?'当前未确认持有，不能上架':n.owned===true?'链上已核验持有':'OpenSea 持仓索引；上架前核验'));
    card.append(el('strong',n.listing?`已上架 · ${n.listing.price}`:!n.listingChecked?'上架状态查询失败':n.local&&n.local.end*1000>Date.now()?`${n.local.status} · ${n.local.price??n.local.priceEth} ${n.local.currency?.symbol??'ETH'}`:'未查到有效上架'));
    if(n.local?.hash)card.append(el('small',`本机订单 ${n.local.hash}`,'address'));
