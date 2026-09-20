@@ -1,3 +1,4 @@
+import {ArtworkService} from './nft-image.mjs';
 import {WalletTracker} from './wallet-tracker.mjs';
 import http from 'node:http';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
@@ -20,6 +21,7 @@ const monitor=new MonitorService(base);await monitor.init();
 const walletTracker=new WalletTracker(base);await walletTracker.init();
 const projectMarket=new ProjectMarket(monitor.keyFile);
 const nftMarket=new NftMarket({keyFile:monitor.keyFile,records,dir:path.join(data,'listings')});
+const artwork=new ArtworkService(endpoint=>nftMarket.api.request(endpoint));
 let projects=[];
 try{projects=JSON.parse(await readFile(path.join(data,'projects.local.json'),'utf8'));}catch(e){if(e.code!=='ENOENT')throw Error('项目文件无法读取，请保留文件并修复。');}
 const wallets=new Map(),jobs=new Map(),reviews=new Map();let mutation=false;
@@ -73,6 +75,9 @@ async function action(route,b){
   if(route==='/api/nfts/cost'){
     const n=nftMarket.selected([b.itemId],[...wallets.values()])[0];
     const cost=await nftMarket.costs.save(n,b);n.cost=cost;nftMarket.reviews.clear();return {cost};
+  }
+  if(route==='/api/nfts/image'){
+    const n=nftMarket.selected([b.itemId],[...wallets.values()])[0];return nftMarket.image(n);
   }
   if(route==='/api/nfts/market'){
     const n=nftMarket.selected([b.itemId],[...wallets.values()])[0];return projectMarket.get({chainId:n.chainId,address:n.contract});
@@ -147,7 +152,7 @@ async function action(route,b){
   throw new Stop('未知操作。');
 }
 const server=http.createServer(async(req,res)=>{
-  const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Cross-Origin-Resource-Policy':'same-origin','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"};
+  const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Cross-Origin-Resource-Policy':'same-origin','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data: https:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"};
   const send=(status,body,type='application/json; charset=utf-8')=>{res.writeHead(status,{...headers,'Content-Type':type});res.end(type.startsWith('application/json')?json(body):body);};
   try {
     requireThat(req.headers.host===`127.0.0.1:${port}`,'只允许本机固定地址访问。');
@@ -156,13 +161,24 @@ const server=http.createServer(async(req,res)=>{
     const route=new URL(req.url,origin).pathname;
     if(req.method==='GET'&&route==='/health')return send(200,{app:'mint-desk',version:'1.0.0',instanceId});
     if(req.method==='GET'&&route==='/')return send(200,(await readFile(path.join(base,'app/index.html'),'utf8')).replace('__TOKEN__',token),'text/html; charset=utf-8');
-    if(req.method==='GET'&&['/app.js','/wallet-tracker-ui.js','/early.js','/monitor-ui.js','/holdings.js','/style.css','/icon.svg'].includes(route))return send(200,await readFile(path.join(base,'app',route.slice(1)),'utf8'),route.endsWith('.svg')?'image/svg+xml':route.endsWith('.js')?'text/javascript; charset=utf-8':'text/css; charset=utf-8');
+    if(req.method==='GET'&&['/app.js','/artwork.js','/wallet-tracker-ui.js','/early.js','/monitor-ui.js','/holdings.js','/style.css','/icon.svg'].includes(route))return send(200,await readFile(path.join(base,'app',route.slice(1)),'utf8'),route.endsWith('.svg')?'image/svg+xml':route.endsWith('.js')?'text/javascript; charset=utf-8':'text/css; charset=utf-8');
     requireThat(req.headers['x-mint-token']===token,'会话失效，请刷新软件页面。');
     if(req.method==='GET'&&route==='/api/state')return send(200,{projects,wallets:walletView(),jobs:[...jobs.values()].map(j=>j.view()),chains:CHAINS});
     if(req.method==='GET'&&route==='/api/history')return send(200,{items:await history()});
     if(req.method==='GET'&&route==='/api/tracker')return send(200,walletTracker.view());
     if(req.method==='GET'&&route==='/api/monitor')return send(200,monitor.snapshot());
+    if(req.method==='GET'&&route==='/api/artwork'){
+      const q=new URL(req.url,origin).searchParams,chainId=Number(q.get('chainId')),contract=q.get('contract')?.toLowerCase(),tokenId=q.has('tokenId')?q.get('tokenId'):undefined;
+      requireThat(CHAINS[chainId]&&/^0x[0-9a-f]{40}$/.test(contract??'')&&(tokenId===undefined||/^\d{1,78}$/.test(tokenId)),'图片目标无效。');
+      const same=n=>n.chainId===chainId&&(n.contract||n.address)?.toLowerCase()===contract;
+      const owned=[...nftMarket.items.values()].some(n=>same(n)&&(tokenId===undefined||n.tokenId===tokenId));
+      const tracked=chainId===4663&&walletTracker.events.some(e=>e.contract===contract&&(tokenId===undefined||e.tokenId===tokenId));
+      const knownCollection=tokenId===undefined&&(projects.some(same)||[...jobs.values()].some(j=>same(j.p))||monitor.candidates().some(r=>(r.chain==='robinhood'?4663:r.chain==='ethereum'?1:0)===chainId&&r.address?.toLowerCase()===contract));
+      requireThat(owned||tracked||knownCollection,'图片目标不在当前项目或活动中，请刷新列表。');
+      return send(200,await artwork.get({chainId,contract,tokenId}));
+    }
     if(req.method==='GET'&&route==='/api/monitor/link'){
+
       const address=new URL(req.url,origin).searchParams.get('address');
       const candidate=monitor.candidates().find(r=>r.chain==='robinhood'&&r.address?.toLowerCase()===address?.toLowerCase());
       requireThat(candidate&&/^0x[0-9a-f]{40}$/i.test(address),'项目不在监控结果中，请刷新后再试。');

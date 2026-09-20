@@ -6,6 +6,7 @@ import {Rpc,Stop,requireThat,amount,gasPlan,json,safeError} from './lib.mjs';
 import {coordinator} from './coordinator.mjs';
 import {CostStore,costOutcome} from './cost-basis.mjs';
 import {lookupMintCost} from './chain-cost.mjs';
+import {nftImageUrl} from './nft-image.mjs';
 
 // Protocol addresses from ProjectOpenSea/opensea-sdk constants and utils/chain.
 export const SEAPORT='0x0000000000000068f116a894984e2db1123eb395';
@@ -125,13 +126,19 @@ export class NftMarket {
   if(!next)for(const [k,v] of minted)if(!raws.has(k))raws.set(k,v);
   const items=[];for(const [key,v]of [...raws].slice(0,200)){
    const n={chainId,walletId:wallet.id,owner:wallet.address,contract:v.contract.toLowerCase(),tokenId:BigInt(v.identifier).toString(),standard:String(v.token_standard??'').toLowerCase(),slug:typeof v.collection==='string'&&/^[a-z0-9_-]{1,150}$/i.test(v.collection)?v.collection:null,name:String(v.name||'NFT #'+v.identifier).slice(0,140),minted:minted.has(key)};
-   n.id=itemKey(n);n.url=`https://opensea.io/assets/${chainName(chainId)}/${n.contract}/${n.tokenId}`;
+   n.id=itemKey(n);n.url=`https://opensea.io/assets/${chainName(chainId)}/${n.contract}/${n.tokenId}`;n.imageUrl=nftImageUrl(v);
    n.listing=listed?.get(key)??null;n.listingChecked=listed!==null;n.local=await this.local(n);n.cost=await this.costs.get(n);
    n.owned=null;if(n.minted){try{await ownership(rpc,n);n.owned=true;}catch{n.owned=false;}}
    if(this.items.size>=5000)this.items.delete(this.items.keys().next().value);this.items.set(n.id,n);items.push(n);
   }return {items,next:typeof page.next==='string'?page.next:null,warnings,checkedAt:Date.now()};
  }
  selected(ids,wallets){requireThat(Array.isArray(ids)&&ids.length>0&&ids.length<=20&&new Set(ids).size===ids.length,'每批选择 1–20 个不同 NFT。');return ids.map(id=>{const n=this.items.get(id);requireThat(n&&wallets.some(w=>w.id===n.walletId&&eq(w.address,n.owner)),'NFT 或钱包已改变，请刷新持仓。');return n;});}
+ async image(n){
+  if(n.imageUrl||Date.now()-(n.imageCheckedAt||0)<60000)return {imageUrl:n.imageUrl??null};
+  const {nft:v}=await this.api.request(`chain/${chainName(n.chainId)}/contract/${n.contract}/nfts/${n.tokenId}`);
+  requireThat(v&&eq(v.contract,n.contract)&&String(v.identifier)===n.tokenId,'NFT 图片详情未匹配。');
+  n.imageUrl=nftImageUrl(v);n.imageCheckedAt=Date.now();return {imageUrl:n.imageUrl};
+ }
  async collection(n){const detail=await this.api.request(`chain/${chainName(n.chainId)}/contract/${n.contract}/nfts/${n.tokenId}`);const v=detail.nft;requireThat(v&&eq(v.contract,n.contract)&&String(v.identifier)===n.tokenId&&String(v.token_standard).toLowerCase()===n.standard&&/^[a-z0-9_-]{1,150}$/i.test(v.collection??''),'NFT 详情未匹配。');n={...n,slug:v.collection};return {n,collection:await this.api.request('collections/'+encodeURIComponent(n.slug))};}
  async currency(ids,wallets,rpcUrl){
   const items=this.selected(ids,wallets);requireThat(items.every(n=>n.walletId===items[0].walletId&&n.chainId===items[0].chainId),'每批选择同一钱包、同一条链的 NFT。');

@@ -2,9 +2,13 @@
 
 Windows 本地 NFT 监控、自动 mint、持仓查看与 OpenSea 批量上架工具。源码采用 MIT 许可证。
 
-[下载 Windows 完整包](https://github.com/cryptoresetlife/mint-desk/releases/download/v1.0-wallet-tracker/Mint-Desk-Windows-V1.0-Wallet-Tracker-Share.zip) · [发布记录](https://github.com/cryptoresetlife/mint-desk/releases) · [详细操作说明](docs/USER-GUIDE.md)
+[下载 Windows 完整包](https://github.com/cryptoresetlife/mint-desk/releases/download/v1.0-nft-images/Mint-Desk-Windows-V1.0-NFT-Images-Share.zip) · [发布记录](https://github.com/cryptoresetlife/mint-desk/releases) · [详细操作说明](docs/USER-GUIDE.md)
 
-## 本次更新：重点钱包监控
+## 本次更新：NFT 图片预览
+
+持仓和钱包活动显示 NFT 单张图片；项目、机会监控和提醒显示系列封面。图片按需加载并共用缓存；需要自己的 OpenSea API Key。详见 [更新说明](CHANGELOG.md)。
+
+## 重点钱包监控
 
 新增 Robinhood 公开钱包活动跟踪、重点提醒和多人参与信号。发布包默认空清单；仅导入公开地址即可使用，无需导入交易钱包。详见 [更新说明](CHANGELOG.md) 和 [重点钱包教程](docs/WALLET-TRACKER.md)。
 
@@ -61,7 +65,7 @@ npm start
 npm test
 ```
 
-本版 98 项测试通过，覆盖预算、签名目标、并发、停止、重复提交、上架费用及本机访问隔离。上架流程使用模拟测试；没有使用真实钱包进行测试授权或测试售卖。Robinhood 接口与持仓查询另做了真实只读检查。
+本版 102 项测试通过，覆盖预算、签名目标、并发、停止、重复提交、上架费用及本机访问隔离。上架流程使用模拟测试；没有使用真实钱包进行测试授权或测试售卖。Robinhood 接口与持仓查询另做了真实只读检查。
 
 ## Windows 构建
 
