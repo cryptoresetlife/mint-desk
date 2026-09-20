@@ -1,8 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {ABI,SEA,TOPICS,decodeEvent,applyEvent,dropPhase,readRpc,ChainDiscovery} from '../monitor/realtime.mjs';
+import {ABI,SEA,TOPICS,decodeEvent,applyEvent,dropPhase,readRpc,ChainDiscovery,displayDropTime} from '../monitor/realtime.mjs';
 import {MarketStream} from '../monitor/market-stream.mjs';
 const address='0x'+'1'.repeat(40),hash='0x'+'2'.repeat(64);
+test('uint48 sale dates outside Date range do not crash snapshots or discard other projects',()=>{
+ const c=new ChainDiscovery('.'),now=Math.floor(Date.now()/1000),max=2**48-1;
+ c.rows.set(address,{address,startTime:now-10,endTime:max,checkedUtc:new Date().toISOString(),walletLimit:1,remaining:'2'});
+ c.rows.set(SEA,{address:SEA,startTime:now+60,endTime:now+600});
+ c.head={number:1,timestamp:now,checkedUtc:new Date().toISOString()};c.cursor=1;
+ const snapshot=c.snapshot(),r=snapshot.rows.find(r=>r.address===address);
+ assert.equal(snapshot.rows.length,2);assert.equal(r.status,'公售开放');assert.equal(r.endUtc,null);assert.match(r.timeDisplayWarning,/超出/);assert.equal(r.endTime,max);
+ assert.equal(displayDropTime(max),null);assert.equal(displayDropTime(Infinity),null);assert.equal(displayDropTime(0),null);assert.equal(displayDropTime(now),new Date(now*1000).toISOString());
+ c.rows.get(address).startTime=max;assert.doesNotThrow(()=>c.snapshot());c.stop();
+});
 function log(block=100){const encoded=ABI.encodeEventLog(ABI.getEvent('PublicDropUpdated'),[address,[0,1000,2000,2,0,false]]);return {...encoded,address:SEA,blockNumber:'0x'+block.toString(16),blockHash:hash,transactionHash:hash,logIndex:'0x1'};}
 test('only configured SeaDrop event emitter is accepted; decoding retains contract and time-order metadata',()=>{
  const e=decodeEvent(log());assert.equal(e.address,address);assert.equal(e.kind,'PublicDropUpdated');assert.equal(e.block,100);
