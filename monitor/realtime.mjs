@@ -17,6 +17,13 @@ export const ABI=new Interface([
 export const TOPICS=['PublicDropUpdated','SeaDropMint','AllowListUpdated','TokenGatedDropStageUpdated','DropURIUpdated'].map(n=>ABI.getEvent(n).topicHash);
 const hex=n=>'0x'+n.toString(16),validAddress=s=>/^0x[0-9a-f]{40}$/i.test(s??'');
 const eventLabels={PublicDropUpdated:'公售配置变更',SeaDropMint:'链上 mint 活动',AllowListUpdated:'白名单更新',TokenGatedDropStageUpdated:'持币阶段更新',DropURIUpdated:'项目资料更新'};
+// SeaDrop uses uint48 seconds, whose upper range exceeds JavaScript Date.
+// Keep the raw seconds for phase checks; an unrenderable date must not stop monitoring.
+export function displayDropTime(seconds){
+ if(!seconds)return null;
+ const ms=Number(seconds)*1000;
+ return Number.isFinite(ms)&&Math.abs(ms)<=8640000000000000?new Date(ms).toISOString():null;
+}
 const allowed=new Set(['eth_chainId','eth_getCode','eth_getBlockByNumber','eth_getLogs','eth_call']);
 export async function readRpc(url,method,params=[]){
  if(!allowed.has(method))throw new Error('仅允许只读 RPC');
@@ -158,7 +165,7 @@ export class ChainDiscovery {
   const healthy=!!this.head&&Date.now()-Date.parse(this.head.checkedUtc)<30000&&!this.error;
   const now=healthy?this.head.timestamp:Math.floor(Date.now()/1000);
   const activity=this.activity.snapshot();
-  const rows=[...this.rows.values()].map(r=>({...r,activity:{...(activity.get(r.address)||this.activity.empty()),healthy:healthy&&this.cursor===this.head.number&&this.activityQueue.size===0&&this.activityPending===0},status:dropPhase(r,now,healthy),profitStatus:'收益未知 / 未评估',startUtc:r.startTime?new Date(r.startTime*1000).toISOString():null,endUtc:r.endTime?new Date(r.endTime*1000).toISOString():null}));
+  const rows=[...this.rows.values()].map(r=>({...r,activity:{...(activity.get(r.address)||this.activity.empty()),healthy:healthy&&this.cursor===this.head.number&&this.activityQueue.size===0&&this.activityPending===0},status:dropPhase(r,now,healthy),profitStatus:'收益未知 / 未评估',startUtc:displayDropTime(r.startTime),endUtc:displayDropTime(r.endTime),timeDisplayWarning:(r.startTime&&!displayDropTime(r.startTime))||(r.endTime&&!displayDropTime(r.endTime))?'链上时间超出可显示范围':null}));
   const order={'公售开放':0,'待开售':1,'待核验':2,'未配置公售':3,'已售罄':4,'已结束':5};rows.sort((a,b)=>order[a.status]-order[b.status]||(a.status==='待开售'?a.startTime-b.startTime:Date.parse(b.firstSeenUtc)-Date.parse(a.firstSeenUtc)));
   return {status:this.status,wsStatus:this.wsStatus,source:this.source,healthy,error:this.error,head:this.head,cursor:this.cursor,blocksToBackfill:this.head?Math.max(0,this.head.number-(this.cursor??0)):null,coverageStart:this.coverageStart,queued:this.queue.size,rows,alerts:this.alerts,scope:'Robinhood 指定 SeaDrop V1 合约的公售/白名单/持币阶段更新及 mint 事件；不覆盖所有自定义 mint，不代表官方认证，实时事件尚未最终确认。首次回查 24h，之后按持久化区块断点补查。'};
  }
