@@ -9,6 +9,9 @@ test('本机接口：隔离跨站访问、导入校验、无默认真实运行�
     const html=await(await fetch(origin)).text(),token=html.match(/name="mint-session" content="([a-f0-9]+)"/)[1];
     const call=async(route,b,extra={})=>fetch(origin+route,{method:b===undefined?'GET':'POST',headers:{'x-mint-token':token,'content-type':'application/json',...extra},body:b===undefined?undefined:JSON.stringify(b)});
     assert.equal((await fetch(origin+'/api/state')).status,400);
+    assert.equal((await fetch(origin+'/api/artwork?chainId=4663&contract=0x'+'a'.repeat(40))).status,400);
+    assert.equal((await call('/api/artwork?chainId=4663&contract=0x'+'a'.repeat(40))).status,400);
+    assert.equal((await fetch(origin+'/artwork.js')).status,200);
     assert.equal((await call('/api/state',undefined,{origin:'https://evil.invalid'})).status,400);
     assert.equal((await call('/api/state',undefined,{'sec-fetch-site':'cross-site'})).status,400);
     let state=await(await call('/api/state')).json();assert.equal(state.wallets.length,0);assert.equal(state.jobs.length,0);
